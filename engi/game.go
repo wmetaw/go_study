@@ -2,14 +2,21 @@ package main
 
 import (
 "github.com/ajhager/engi"
+// "fmt"
+// "reflect"
 )
+
+var gravity float32 = 25
+var windowHeight float32 = 800
+var windowWidth  float32 = 1200
+
 
 // ゲームオブジェクト
 type Game struct {
     *engi.Game
 
-    // ロゴ画像
-    bot   engi.Drawable
+    // ゴーファーくん
+    PL
 
     // 描画用バッチ？
     batch *engi.Batch
@@ -17,41 +24,52 @@ type Game struct {
     // フォント
     font  *engi.Font
 
-    // ロゴの座標
-    botX ,botY float32
-
     // キーマッピング
     keyMap map[engi.Key]bool
 }
 
-/**
- * ロード
- *
- * 最初に呼び出される
- */
- func (game *Game) Preload() {
+// ゴーファーくん
+type PL struct {
 
-    // spriteの読み込み
-    engi.Files.Add("bot", "data/icon.png")
-    engi.Files.Add("font", "data/font.png")
-    game.batch = engi.NewBatch(engi.Width(), engi.Height())
-
-    // キーマップの作成
-    game.keyMap = make(map[engi.Key]bool)
-    game.botX, game.botY = 512, 320
+    img engi.Drawable
+    animeNo int
+    posX float32
+    posY float32
+    waitFrame float32
+    waitImg [2]engi.Drawable
+    // isJump bool = false
 }
 
-/**
- * セットアップ
- *
- * Preloadの次に呼ばれる
- */
- func (game *Game) Setup() {
+func (pl PL) Update(game *Game, dt float32) {
 
-    // 背景
-    engi.SetBg(0x2d3739)
-    game.bot = engi.Files.Image("bot")
-    game.font = engi.NewGridFont(engi.Files.Image("font"), 20, 20)
+    // 落下
+    game.PL.posY += gravity
+    if game.PL.posY > windowHeight - game.PL.img.Height()/4 {
+        game.PL.posY = windowHeight - game.PL.img.Height()/4
+    }
+
+    // 5フレーム後にアニメーションを切り替え
+    var isChange bool
+    if game.PL.waitFrame >= (dt*5) {
+        game.PL.waitFrame = dt
+        isChange = true
+    }  else {
+        game.PL.waitFrame += dt
+    }
+
+    // アニメーション切り替え
+    if isChange {
+
+        // キャラ画像を置換
+        game.PL.img = game.PL.waitImg[game.PL.animeNo]
+
+        // アニメーション番号をカウントアップ
+        game.PL.animeNo++
+        if len(game.PL.waitImg) == game.PL.animeNo {
+            game.PL.animeNo = 0
+        }
+    }
+
 }
 
 /**
@@ -64,10 +82,10 @@ type Game struct {
     game.batch.Begin()
 
     // フォントの表示
-    game.font.Print(game.batch, "ENGI", 475, 200, 0xffffff)
+    game.font.Print(game.batch, "ENGI", 475, 200, 0x000000)
 
     // ロゴを表示
-    game.batch.Draw(game.bot, game.botX, game.botY, 0.5, 0.5, 10, 10, 0, 0xffffff, 1)
+    game.batch.Draw(game.PL.img, game.PL.posX, game.PL.posY, 1, 1, 1, 1, 0, 0xffffff, 1)
 
     game.batch.End()
 }
@@ -78,25 +96,30 @@ type Game struct {
  *
  * 【引数】時間差 float32(0.01635106とか）
  */
- func (game *Game) Update(dt float32) {
+    func (game *Game) Update(dt float32) {
 
-    var dx, dy float32
-    if game.keyMap[engi.ArrowUp] {
-        dy = -10
-    }
-    if game.keyMap[engi.ArrowDown] {
-        dy = 10
-    }
-    if game.keyMap[engi.ArrowLeft] {
-        dx = -10
-    }
-    if game.keyMap[engi.ArrowRight] {
-        dx = 10
-    }
+        var dx, dy float32
+        if game.keyMap[engi.ArrowUp] {
+            dy = -30
+        }
+        if game.keyMap[engi.ArrowDown] {
+            dy = 30
+        }
+        if game.keyMap[engi.ArrowLeft] {
+            dx = -10
+        }
+        if game.keyMap[engi.ArrowRight] {
+            dx = 10
+        }
+        if game.keyMap[engi.Space] {
+            game.PL.posY -= 30
+        }
 
-    game.botX += dx
-    game.botY += dy
-}
+        game.PL.posX += dx
+        game.PL.posY += dy
+
+        game.PL.Update(game, dt)
+    }
 
 /**
  * キー入力判定
@@ -117,8 +140,48 @@ type Game struct {
  */
  func main() {
 
-    //      タイトル, height, width, fullscreen, Gameオブジェクト
-    engi.Open("Hello", 1024, 640, false, &Game{})
+    //      タイトル, width, height, fullscreen, Gameオブジェクト
+    engi.Open("Hello", 1200, 800, false, &Game{})
+}
+
+
+
+/**
+ * ロード
+ *
+ * 最初に呼び出される
+ */
+ func (game *Game) Preload() {
+
+    // spriteの読み込み
+    engi.Files.Add("plWait1", "img/player/wait/1.png")
+    engi.Files.Add("plWait2", "img/player/wait/2.png")
+    engi.Files.Add("font", "img/font.png")
+
+    game.batch = engi.NewBatch(engi.Width(), engi.Height())
+
+    // キーマップの作成
+    game.keyMap = make(map[engi.Key]bool)
+
+    // プレイヤーキャラ初期化
+    game.PL.posX, game.PL.posY = 512, 320
+    game.PL.waitFrame = 0
+    game.PL.animeNo = 0
+}
+
+/**
+ * セットアップ
+ *
+ * Preloadの次に呼ばれる
+ */
+ func (game *Game) Setup() {
+
+    // 背景
+    engi.SetBg(0xfffffa)
+    game.PL.waitImg[0] = engi.Files.Image("plWait1")
+    game.PL.waitImg[1] = engi.Files.Image("plWait2")
+    game.PL.img = game.PL.waitImg[0]
+    game.font = engi.NewGridFont(engi.Files.Image("font"), 20, 20)
 }
 
 
