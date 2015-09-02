@@ -7,12 +7,12 @@ import (
 
 // 型宣言
 type AnimeType int
+type SceneType int
 
-// 重力
-var GRAVITY float32 = 9.6
-
-var windowHeight float32 = 800
-var windowWidth float32 = 1200
+// 定数
+const GRAVITY float32 = 9.6
+const WINDOW_HEIGHT float32 = 800
+const WINDOW_WIDTH float32 = 1200
 
 // アニメーション定数
 const (
@@ -22,6 +22,14 @@ const (
 	ANIME_TYPE_SHOOT
 )
 
+// シーン定数
+const (
+	SCENE_TITLE SceneType = iota
+	SCENE_MAIN
+)
+var scene_type SceneType
+
+// ジャンプ加速度
 var JUMP_COUNTER = [...]float32{-110, -90, -60, -30, -20, -10, -5, -3, -1, 0, 1, 3, 10, 20, 30, 40, 50, 70}
 
 //=================================
@@ -40,14 +48,15 @@ type Game struct {
 	font *engi.Font
 
 	// BG
-	bg engi.Drawable
+	bg ,top engi.Drawable
 
 	// キーマッピング
 	keyMap map[engi.Key]bool
 }
 
+
 //=================================
-// 弾構造体
+// 弾
 //=================================
 type Bullet struct {
 	img  engi.Drawable
@@ -56,14 +65,12 @@ type Bullet struct {
 	flg  bool
 }
 
-
-// 弾更新
 func (bt Bullet) Update(bullet *Bullet, dt float32) {
 
 	if bullet.flg == true {
 		bullet.posX += 10
 
-		if bullet.posX > windowWidth {
+		if bullet.posX > WINDOW_WIDTH {
 			bullet.flg = false
 		}
 	}
@@ -71,7 +78,7 @@ func (bt Bullet) Update(bullet *Bullet, dt float32) {
 
 
 //=================================
-// プレイヤー構造体
+// プレイヤー
 //=================================
 type Player struct {
 	img  engi.Drawable
@@ -93,8 +100,29 @@ type Player struct {
 	bullets   []Bullet
 }
 
-// プレイヤー更新
 func (pl Player) Update(game *Game, dt float32) {
+
+	var dx float32
+	game.Player.animeType = ANIME_TYPE_WAIT
+	if game.keyMap[engi.ArrowLeft] {
+		dx = -10
+		game.Player.animeType = ANIME_TYPE_RUN
+	}
+	if game.keyMap[engi.ArrowRight] {
+		dx = 10
+		game.Player.animeType = ANIME_TYPE_RUN
+	}
+	if game.keyMap[engi.D] {
+		game.Player.animeType = ANIME_TYPE_SHOOT
+	}
+	if game.keyMap[engi.Space] {
+		game.Player.isJump = true
+	}
+	if game.Player.isJump {
+		game.Player.animeType = ANIME_TYPE_JUMP
+	}
+
+	game.Player.posX += dx
 
 	// 慣性ジャンプ
 	if game.Player.isJump && game.Player.jumpCnt < len(JUMP_COUNTER) {
@@ -117,8 +145,8 @@ func (pl Player) Update(game *Game, dt float32) {
 	// fmt.Printf("X：%f", game.Player.posX)
 	// fmt.Printf("Y：%f\n", game.Player.posY)
 
-	if game.Player.posX > windowWidth + game.Player.img.Width()/4 {
-		game.Player.posX = windowWidth + game.Player.img.Width()/4
+	if game.Player.posX > WINDOW_WIDTH + game.Player.img.Width()/4 {
+		game.Player.posX = WINDOW_WIDTH + game.Player.img.Width()/4
 	}
 
 	// 5フレーム後にアニメーションを切り替え
@@ -190,8 +218,46 @@ func (pl Player) Update(game *Game, dt float32) {
 
 }
 
+func (pl Player) Render(game *Game) {
+
+	// 描画
+	game.batch.Draw(game.Player.img, game.Player.posX, game.Player.posY, 1, 1, 1, 1, 0, 0xffffff, 1)
+
+	// プレイヤーの弾描画
+	for i := 0; i < len(game.Player.bullets); i++ {
+		if game.Player.bullets[i].flg == true {
+			game.batch.Draw(game.Player.bullets[i].img, game.Player.bullets[i].posX, game.Player.bullets[i].posY, 1, 1, 1, 1, 0, 0xffffff, 1)
+		}
+	}
+}
 
 
+//==================================
+// SCENE FUNCTIONS
+//==================================
+func TitleUpdate(game *Game, dt float32) {
+	if game.keyMap[engi.S] {
+		scene_type = SCENE_MAIN
+	}
+}
+
+func TitleRender(game *Game) {
+	game.batch.Draw(game.top, 1200, 750, 1, 1, 1, 0.94, 0, 0xffffff, 1)
+}
+
+func MainUpdate(game *Game, dt float32) {
+	game.Player.Update(game, dt)
+}
+
+func MainRender(game *Game) {
+	game.batch.Draw(game.bg, 1200, 750, 1, 1, 1, 0.94, 0, 0xffffff, 1)
+	game.Player.Render(game)
+}
+
+
+//==================================
+// ENGI FUNCTIONS
+//==================================
 /**
  * 更新
  *
@@ -199,42 +265,12 @@ func (pl Player) Update(game *Game, dt float32) {
  */
 func (game *Game) Update(dt float32) {
 
-	var dx float32
-	game.Player.animeType = ANIME_TYPE_WAIT
-	if game.keyMap[engi.ArrowLeft] {
-		dx = -10
-		game.Player.animeType = ANIME_TYPE_RUN
-	}
-	if game.keyMap[engi.ArrowRight] {
-		dx = 10
-		game.Player.animeType = ANIME_TYPE_RUN
-	}
-	if game.keyMap[engi.D] {
-		game.Player.animeType = ANIME_TYPE_SHOOT
-	}
-	if game.keyMap[engi.Space] {
-		game.Player.isJump = true
-	}
-	if game.Player.isJump {
-		game.Player.animeType = ANIME_TYPE_JUMP
-	}
-
-	game.Player.posX += dx
-
-	game.Player.Update(game, dt)
-}
-
-/**
- * キー入力判定
- */
-func (game *Game) Key(key engi.Key, modifier engi.Modifier, action engi.Action) {
-
-	// 対応するキーのフラグをON
-	switch action {
-	case engi.PRESS:
-		game.keyMap[key] = true
-	case engi.RELEASE:
-		game.keyMap[key] = false
+	// シーン更新
+	switch scene_type {
+	case SCENE_TITLE:
+		TitleUpdate(game, dt)
+	case SCENE_MAIN:
+		MainUpdate(game, dt)
 	}
 }
 
@@ -248,17 +284,13 @@ func (game *Game) Render() {
 	game.batch.Begin()
 
 	// フォントの表示
-	game.font.Print(game.batch, "ENGI", 475, 200, 0x000000)
+	game.font.Print(game.batch, "GOOL", 475, 200, 0x000000)
 
-	// 表示
-	game.batch.Draw(game.bg, 1200, 760, 1, 1, 1, 0.95, 0, 0xffffff, 1)
-	game.batch.Draw(game.Player.img, game.Player.posX, game.Player.posY, 1, 1, 1, 1, 0, 0xffffff, 1)
-
-	// プレイヤーの弾描画
-	for i := 0; i < len(game.Player.bullets); i++ {
-		if game.Player.bullets[i].flg == true {
-			game.batch.Draw(game.Player.bullets[i].img, game.Player.bullets[i].posX, game.Player.bullets[i].posY, 1, 1, 1, 1, 0, 0xffffff, 1)
-		}
+	switch scene_type {
+	case SCENE_TITLE:
+		TitleRender(game)
+	case SCENE_MAIN:
+		MainRender(game)
 	}
 
 	game.batch.End()
@@ -271,7 +303,7 @@ func (game *Game) Render() {
 func main() {
 
 	//      タイトル, width, height, fullscreen, Gameオブジェクト
-	engi.Open("Hello", 1200, 800, false, &Game{})
+	engi.Open("GOOL", 1200, 800, false, &Game{})
 }
 
 /**
@@ -284,36 +316,23 @@ func (game *Game) Preload() {
 	// spriteの読み込み
 	engi.Files.Add("plWait0", "img/player/wait/0.png")
 	engi.Files.Add("plWait1", "img/player/wait/1.png")
-
 	engi.Files.Add("plRun0", "img/player/run/0.png")
 	engi.Files.Add("plRun1", "img/player/run/1.png")
 	engi.Files.Add("plRun2", "img/player/run/2.png")
-
 	engi.Files.Add("plShoot0", "img/player/shoot/0.png")
 	engi.Files.Add("plShoot1", "img/player/shoot/1.png")
 	engi.Files.Add("plShoot2", "img/player/shoot/2.png")
-
 	engi.Files.Add("plJump0", "img/player/jump/0.png")
 	engi.Files.Add("plJump1", "img/player/jump/1.png")
-
 	engi.Files.Add("bg", "img/bg.png")
-
+	engi.Files.Add("top", "img/top.png")
 	engi.Files.Add("font", "img/font.png")
-
 	engi.Files.Add("bom", "img/bullet/bom.png")
 
 	game.batch = engi.NewBatch(engi.Width(), engi.Height())
 
 	// キーマップの作成
 	game.keyMap = make(map[engi.Key]bool)
-
-	// プレイヤーキャラ初期化(TODO初期化関数を作る)
-	game.Player.posX, game.Player.posY = 300, 500
-	game.Player.animeFrame = 0
-	game.Player.animeNo = 0
-	game.Player.animeType = ANIME_TYPE_WAIT
-	game.Player.jumpCnt = 0
-	game.Player.bulletMax = 20
 }
 
 /**
@@ -325,26 +344,53 @@ func (game *Game) Setup() {
 
 	// 背景
 	engi.SetBg(0xfffffa)
+	game.bg = engi.Files.Image("bg")
+	game.top = engi.Files.Image("top")
+
+	//=======================================================
+	// プレイヤーキャラ初期化(TODO初期化関数を作る)
+	//=======================================================
+	game.Player.posX, game.Player.posY = 300, 500
+	game.Player.animeFrame = 0
+	game.Player.animeNo = 0
+	game.Player.animeType = ANIME_TYPE_WAIT
+	game.Player.jumpCnt = 0
+	game.Player.bulletMax = 20
+
 	game.Player.waitImages[0] = engi.Files.Image("plWait0")
 	game.Player.waitImages[1] = engi.Files.Image("plWait1")
-
 	game.Player.runImages[0] = engi.Files.Image("plRun0")
 	game.Player.runImages[1] = engi.Files.Image("plRun1")
 	game.Player.runImages[2] = engi.Files.Image("plRun2")
-
 	game.Player.shootImages[0] = engi.Files.Image("plShoot0")
 	game.Player.shootImages[1] = engi.Files.Image("plShoot1")
 	game.Player.shootImages[2] = engi.Files.Image("plShoot2")
-
 	game.Player.jumpImages[0] = engi.Files.Image("plJump0")
 	game.Player.jumpImages[1] = engi.Files.Image("plJump1")
-
-	game.bg = engi.Files.Image("bg")
+	game.Player.img = game.Player.waitImages[0]
 
 	for i := 0; i < game.Player.bulletMax; i++ {
 		game.Player.bullets = append(game.Player.bullets, Bullet{engi.Files.Image("bom"), 0, 0, false})
 	}
 
-	game.Player.img = game.Player.waitImages[0]
+	// フォント
 	game.font = engi.NewGridFont(engi.Files.Image("font"), 20, 20)
+
+	// シーン
+	scene_type = SCENE_TITLE
+}
+
+
+/**
+ * キー入力判定
+ */
+func (game *Game) Key(key engi.Key, modifier engi.Modifier, action engi.Action) {
+
+	// 対応するキーのフラグをON
+	switch action {
+	case engi.PRESS:
+		game.keyMap[key] = true
+	case engi.RELEASE:
+		game.keyMap[key] = false
+	}
 }
